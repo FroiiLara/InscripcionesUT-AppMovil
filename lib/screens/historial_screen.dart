@@ -137,6 +137,8 @@ class _Tarjeta extends StatelessWidget {
     final estatus = solicitud['estatus']         ?? 'En revisión';
     final carrera = solicitud['carrera']         ?? '';
     final materias= solicitud['materias']        as List? ?? [];
+    final motivo  = (solicitud['motivo_rechazo'] ?? '').toString();
+    final rechazada = estatus == 'Rechazada';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -191,6 +193,35 @@ class _Tarjeta extends StatelessWidget {
                       color: UTSCColors.verde, borderRadius: BorderRadius.circular(20)),
                   child: Text(m.toString(), style: const TextStyle(color: Colors.white, fontSize: 11)),
                 )).toList(),
+              ),
+            ],
+            if (rechazada) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: UTSCColors.rechazadaFondo,
+                  borderRadius: BorderRadius.circular(8),
+                  border: const Border(left: BorderSide(color: UTSCColors.rechazada, width: 3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Motivo del rechazo',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: UTSCColors.rechazada)),
+                    const SizedBox(height: 2),
+                    Text(
+                      motivo.isNotEmpty
+                          ? motivo
+                          : 'No se registró un motivo. Comunícate con Control Escolar.',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontStyle: motivo.isNotEmpty ? FontStyle.normal : FontStyle.italic,
+                          color: UTSCColors.texto),
+                    ),
+                  ],
+                ),
               ),
             ],
             if (fecha.isNotEmpty) ...[

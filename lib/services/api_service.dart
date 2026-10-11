@@ -184,6 +184,7 @@ class ApiService {
     required String folio,
     required String tipo,
     required String estatus,
+    String? motivo, // obligatorio cuando estatus == 'Rechazada'
   }) async {
     try {
       final headers = await getHeaders();
@@ -192,12 +193,68 @@ class ApiService {
             Uri.parse('$baseUrl/api/admin/actualizar_estatus'),
             headers: headers,
             body:
-                jsonEncode({'folio': folio, 'tipo': tipo, 'estatus': estatus}),
+                jsonEncode({
+              'folio': folio,
+              'tipo': tipo,
+              'estatus': estatus,
+              if (motivo != null) 'motivo': motivo,
+            }),
           )
           .timeout(const Duration(seconds: 30));
       return response.statusCode == 200;
     } catch (_) {
       return false;
+    }
+  }
+
+  // ── DASHBOARD (admin) ─────────────────────────────────────
+  static Future<Map<String, dynamic>?> getDashboard(
+      {String estatus = 'Todas'}) async {
+    try {
+      final headers = await getHeaders();
+      final uri = Uri.parse('$baseUrl/api/admin/dashboard')
+          .replace(queryParameters: {'estatus': estatus});
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 30));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ── REPORTES EXCEL (admin) ────────────────────────────────
+  // Pide al servidor un enlace temporal de descarga (válido unos minutos)
+  // que luego se abre en el navegador del teléfono.
+  static Future<Map<String, dynamic>> crearEnlaceReporte({
+    required String tipo,
+    String estatus = 'Todas',
+    String carrera = 'Todas',
+    String? desde, // AAAA-MM-DD
+    String? hasta, // AAAA-MM-DD
+  }) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/admin/reportes/enlace'),
+            headers: headers,
+            body: jsonEncode({
+              'tipo': tipo,
+              'estatus': estatus,
+              'carrera': carrera,
+              'desde': desde ?? '',
+              'hasta': hasta ?? '',
+            }),
+          )
+          .timeout(const Duration(seconds: 60));
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return {...data, 'ok': response.statusCode == 200 && data['ok'] == true};
+    } catch (_) {
+      return {'ok': false, 'mensaje': 'Error de conexión. Intenta de nuevo.'};
     }
   }
 

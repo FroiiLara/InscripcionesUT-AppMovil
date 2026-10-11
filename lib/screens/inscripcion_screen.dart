@@ -117,6 +117,27 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
     return await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
   }
 
+  // ── Edad mínima para inscribirse ──
+  static const int _edadMinima = 18;
+  static const int _edadMaxima = 100;
+
+  static DateTime get _fechaMaxNac {
+    final h = DateTime.now();
+    return DateTime(h.year - _edadMinima, h.month, h.day);
+  }
+
+  static DateTime get _fechaMinNac {
+    final h = DateTime.now();
+    return DateTime(h.year - _edadMaxima, h.month, h.day);
+  }
+
+  static int _edadCumplida(DateTime nac) {
+    final h = DateTime.now();
+    var e = h.year - nac.year;
+    if (h.month < nac.month || (h.month == nac.month && h.day < nac.day)) e--;
+    return e;
+  }
+
   void _err(String msg) => ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: UTSCColors.error));
 
@@ -124,6 +145,9 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
     if (_nombreCtrl.text.trim().isEmpty) { _err('Ingresa tu nombre completo'); return false; }
     if (_curpCtrl.text.trim().length != 18) { _err('Ingresa una CURP válida'); return false; }
     if (_fechaNac == null) { _err('Selecciona tu fecha de nacimiento'); return false; }
+    if (_edadCumplida(_fechaNac!) < _edadMinima) {
+      _err('Debes tener al menos $_edadMinima años cumplidos para inscribirte'); return false;
+    }
     if (_telCtrl.text.trim().length != 10) { _err('El teléfono debe tener 10 dígitos'); return false; }
     if (_foto == null) { _err('Agrega tu fotografía'); return false; }
     return true;
@@ -225,8 +249,12 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
       const SizedBox(height: 14),
       UTSCCampo(label: 'Fecha de Nacimiento *', child: InkWell(
         onTap: () async {
-          final p = await showDatePicker(context: context, initialDate: DateTime(2000),
-              firstDate: DateTime(1950), lastDate: DateTime.now(),
+          final maxNac = _fechaMaxNac;
+          final inicial = _fechaNac ?? DateTime(maxNac.year - 2, 1, 1);
+          final p = await showDatePicker(context: context,
+              initialDate: inicial.isAfter(maxNac) ? maxNac : inicial,
+              firstDate: _fechaMinNac, lastDate: maxNac,
+              helpText: 'Fecha de nacimiento (mínimo $_edadMinima años)',
               builder: (ctx, child) => Theme(
                 data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: UTSCColors.verde)),
                 child: child!));

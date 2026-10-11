@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../constants/colors.dart';
 import '../services/api_service.dart';
+import 'admin_dashboard_view.dart';
+import 'admin_reportes_view.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -23,7 +25,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 2, vsync: this);
+    _tabCtrl = TabController(length: 4, vsync: this);
     _cargar();
   }
 
@@ -42,11 +44,81 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     });
   }
 
-  Future<void> _cambiarEstatus(dynamic sol, String tipo, String nuevoEstatus) async {
+  static const _sugerenciasRechazo = [
+    'El acta de nacimiento no es actualizada',
+    'Documento ilegible o incompleto',
+    'El comprobante de pago no es válido',
+    'La fotografía no cumple con los requisitos',
+  ];
+
+  /// Pide al administrador el motivo del rechazo. Devuelve null si cancela.
+  Future<String?> _pedirMotivo(String folio) {
+    final ctrl = TextEditingController();
+    String? error;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: Text('Rechazar $folio', style: const TextStyle(fontSize: 17)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('El alumno verá este motivo al consultar su trámite y le llegará por correo.',
+                    style: TextStyle(fontSize: 12, color: UTSCColors.textoGris)),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6, runSpacing: 0,
+                  children: _sugerenciasRechazo.map((t) => ActionChip(
+                    label: Text(t, style: const TextStyle(fontSize: 11)),
+                    onPressed: () => setD(() { ctrl.text = t; error = null; }),
+                  )).toList(),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: ctrl, maxLines: 4, maxLength: 500,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    hintText: 'Escribe el motivo del rechazo...', errorText: error),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: UTSCColors.rechazada, minimumSize: const Size(0, 44)),
+              onPressed: () {
+                final t = ctrl.text.trim();
+                if (t.length < 5) {
+                  setD(() => error = 'Escribe al menos 5 caracteres');
+                  return;
+                }
+                Navigator.pop(ctx, t);
+              },
+              child: const Text('Rechazar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _cambiarEstatus(dynamic sol, String tipo, String nuevoEstatus, {String? motivo}) async {
     final folio = sol['folio'] ?? '';
-    final ok = await ApiService.actualizarEstatus(folio: folio, tipo: tipo, estatus: nuevoEstatus);
+    final ok = await ApiService.actualizarEstatus(
+        folio: folio, tipo: tipo, estatus: nuevoEstatus, motivo: motivo);
     if (ok) {
-      setState(() => sol['estatus'] = nuevoEstatus);
+      setState(() {
+        sol['estatus'] = nuevoEstatus;
+        if (nuevoEstatus == 'Rechazada' && motivo != null) {
+          sol['motivo_rechazo'] = motivo;
+        } else {
+          sol.remove('motivo_rechazo');
+        }
+      });
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('$folio → $nuevoEstatus'),
         backgroundColor: nuevoEstatus == 'Aprobada' ? UTSCColors.aprobada : UTSCColors.rechazada,
@@ -83,8 +155,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
               leading: const CircleAvatar(backgroundColor: UTSCColors.rechazadaFondo,
                   child: Icon(Icons.close, color: UTSCColors.rechazada)),
               title: const Text('Rechazar solicitud'),
-              subtitle: const Text('Se notificará al alumno por correo'),
-              onTap: () { Navigator.pop(context); _cambiarEstatus(sol, tipo, 'Rechazada'); },
+              subtitle: const Text('Pedirá el motivo y se notificará al alumno'),
+              onTap: () async {
+                Navigator.pop(context);
+                final motivo = await _pedirMotivo('${sol['folio']}');
+                if (motivo != null && mounted) _cambiarEstatus(sol, tipo, 'Rechazada', motivo: motivo);
+              },
             ),
             ListTile(
               leading: const CircleAvatar(backgroundColor: UTSCColors.revisionFondo,
@@ -124,41 +200,50 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
           color: UTSCColors.verde,
           child: TabBar(
             controller: _tabCtrl,
+            isScrollable: true,
             indicatorColor: UTSCColors.naranja, indicatorWeight: 3,
             labelColor: Colors.white, unselectedLabelColor: Colors.white60,
-            tabs: [Tab(text: 'Inscripciones ($_totalInsc)'), Tab(text: 'Reinscripciones ($_totalReinsc)')],
+            tabs: [
+              Tab(text: 'Inscripciones ($_totalInsc)'),
+              Tab(text: 'Reinscripciones ($_totalReinsc)'),
+              const Tab(icon: Icon(Icons.pie_chart_outline, size: 18), text: 'Dashboard'),
+              const Tab(icon: Icon(Icons.table_view_outlined, size: 18), text: 'Reportes'),
+            ],
           ),
         ),
         // Contenido
         Expanded(
-          child: _cargando
-              ? const Center(child: CircularProgressIndicator(color: UTSCColors.verde))
-              : RefreshIndicator(
-                  color: UTSCColors.verde, onRefresh: _cargar,
-                  child: TabBarView(
-                    controller: _tabCtrl,
-                    children: [
-                      _inscripciones.isEmpty
-                          ? _Vacio('No hay solicitudes de inscripción.')
-                          : ListView.builder(
-                              padding: const EdgeInsets.all(16),
-                              itemCount: _inscripciones.length,
-                              itemBuilder: (_, i) => _Tarjeta(
-                                solicitud: _inscripciones[i], tipo: 'inscripcion',
-                                onAccion: () => _dialogo(_inscripciones[i], 'inscripcion'))),
-                      _reinscripciones.isEmpty
-                          ? _Vacio('No hay solicitudes de reinscripción.')
-                          : ListView.builder(
-                              padding: const EdgeInsets.all(16),
-                              itemCount: _reinscripciones.length,
-                              itemBuilder: (_, i) => _Tarjeta(
-                                solicitud: _reinscripciones[i], tipo: 'reinscripcion',
-                                onAccion: () => _dialogo(_reinscripciones[i], 'reinscripcion'))),
-                    ],
-                  ),
-                ),
+          child: TabBarView(
+            controller: _tabCtrl,
+            children: [
+              _lista(_inscripciones, 'inscripcion', 'No hay solicitudes de inscripción.'),
+              _lista(_reinscripciones, 'reinscripcion', 'No hay solicitudes de reinscripción.'),
+              const AdminDashboardView(),
+              const AdminReportesView(),
+            ],
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _lista(List<dynamic> items, String tipo, String vacio) {
+    if (_cargando) {
+      return const Center(child: CircularProgressIndicator(color: UTSCColors.verde));
+    }
+    return RefreshIndicator(
+      color: UTSCColors.verde, onRefresh: _cargar,
+      child: items.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [SizedBox(height: 300, child: _Vacio(vacio))])
+          : ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              itemCount: items.length,
+              itemBuilder: (_, i) => _Tarjeta(
+                  solicitud: items[i], tipo: tipo,
+                  onAccion: () => _dialogo(items[i], tipo))),
     );
   }
 }
@@ -190,6 +275,7 @@ class _Tarjeta extends StatelessWidget {
     final fecha   = solicitud['fecha_solicitud'] ?? '';
     final estatus = solicitud['estatus']         ?? 'En revisión';
     final materias= solicitud['materias']        as List? ?? [];
+    final motivo  = (solicitud['motivo_rechazo'] ?? '').toString();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12), elevation: 2,
@@ -228,6 +314,24 @@ class _Tarjeta extends StatelessWidget {
                     decoration: BoxDecoration(color: UTSCColors.verde, borderRadius: BorderRadius.circular(20)),
                     child: Text(m.toString(), style: const TextStyle(color: Colors.white, fontSize: 10)),
                   )).toList()),
+            ],
+            if (estatus == 'Rechazada') ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: UTSCColors.rechazadaFondo,
+                  borderRadius: BorderRadius.circular(8),
+                  border: const Border(left: BorderSide(color: UTSCColors.rechazada, width: 3)),
+                ),
+                child: Text(
+                  motivo.isNotEmpty ? 'Motivo: $motivo' : 'Sin motivo registrado',
+                  style: TextStyle(
+                      fontSize: 12, color: UTSCColors.rechazada,
+                      fontStyle: motivo.isNotEmpty ? FontStyle.normal : FontStyle.italic),
+                ),
+              ),
             ],
             if (fecha.isNotEmpty) ...[
               const SizedBox(height: 4),
