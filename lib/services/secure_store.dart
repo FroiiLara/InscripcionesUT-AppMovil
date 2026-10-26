@@ -1,5 +1,6 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/log.dart';
 
 /// Almacenamiento CIFRADO para lo sensible (tokens de sesión).
 /// En Android usa EncryptedSharedPreferences (clave guardada en el Keystore del
@@ -18,17 +19,22 @@ class SecureStore {
   static Future<String?> leer(String clave) async {
     try {
       return await _storage.read(key: clave);
-    } catch (_) {
+    } catch (e) {
+      logDebug('SecureStore.leer($clave) falló: $e');
       // Si el almacén quedó corrupto (p. ej. tras restaurar el teléfono) se limpia.
       try { await _storage.deleteAll(); } catch (_) {}
       return null;
     }
   }
 
-  static Future<void> guardar(String clave, String valor) async {
+  static Future<bool> guardar(String clave, String valor) async {
     try {
       await _storage.write(key: clave, value: valor);
-    } catch (_) {}
+      return true;
+    } catch (e) {
+      logDebug('SecureStore.guardar($clave) falló: $e');
+      return false;
+    }
   }
 
   static Future<void> borrar(String clave) async {

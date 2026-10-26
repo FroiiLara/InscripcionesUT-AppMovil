@@ -49,8 +49,11 @@ class BiometricService {
   }
 
   // ── Activar la sesión rápida (no guarda la contraseña) ────
-  static Future<void> habilitar() async {
-    await SecureStore.guardar(SecureStore.kBioHabilitado, 'true');
+  static Future<bool> habilitar() async {
+    final refresh = await SecureStore.leer(SecureStore.kRefreshToken);
+    logDebug('Activar huella: refresh token presente = ${refresh != null && refresh.isNotEmpty}');
+    if (refresh == null || refresh.isEmpty) return false; // el servidor no entregó sesión renovable
+    return SecureStore.guardar(SecureStore.kBioHabilitado, 'true');
   }
 
   // ── ¿Está activada y hay una sesión que renovar? ──────────

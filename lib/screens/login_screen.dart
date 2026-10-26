@@ -6,6 +6,7 @@ import 'home_screen.dart';
 import 'register_screen.dart';
 import 'forgot_password_screen.dart';
 import '../services/biometric_service.dart';
+import '../utils/log.dart';
 
 class LoginScreen extends StatefulWidget {
   /// Mensaje que se muestra al abrir (p. ej. "Tu sesión expiró").
@@ -36,6 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _verificarBiometrico() async {
     final disponible = await BiometricService.isAvailable();
     final habilitado = await BiometricService.estaHabilitado();
+    logDebug('Biometría: disponible=$disponible, habilitada=$habilitado');
     if (!mounted) return;
     setState(() {
       _bioDisponible = disponible;
@@ -131,8 +133,14 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
     if (guardar == true) {
-      await BiometricService.habilitar(); // solo una bandera: no se guarda la contraseña
-      if (mounted) setState(() => _bioHabilitado = true);
+      final ok = await BiometricService.habilitar(); // solo una bandera: no se guarda la contraseña
+      if (mounted) setState(() => _bioHabilitado = ok);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudo activar la huella en este dispositivo.'),
+          backgroundColor: UTSCColors.error,
+        ));
+      }
     }
     if (mounted) {
       Navigator.pushReplacement(
