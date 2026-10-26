@@ -52,7 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (ok == true) {
-      await ApiService.clearToken();
+      await ApiService.cerrarSesion(); // revoca la sesión en el servidor
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,

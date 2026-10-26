@@ -8,7 +8,9 @@ import 'forgot_password_screen.dart';
 import '../services/biometric_service.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  /// Mensaje que se muestra al abrir (p. ej. "Tu sesión expiró").
+  final String? mensajeInicial;
+  const LoginScreen({super.key, this.mensajeInicial});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -27,46 +29,46 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    _errorMensaje = widget.mensajeInicial;
     _verificarBiometrico();
   }
 
   Future<void> _verificarBiometrico() async {
     final disponible = await BiometricService.isAvailable();
     final habilitado = await BiometricService.estaHabilitado();
+    if (!mounted) return;
     setState(() {
       _bioDisponible = disponible;
       _bioHabilitado = habilitado;
     });
   }
 
+  // La huella NO guarda la contraseña: solo desbloquea la sesión que el servidor ya
+  // entregó (refresh token cifrado), que se canjea por tokens nuevos.
   Future<void> _loginBiometrico() async {
-    final credenciales = await BiometricService.obtenerCredenciales();
-    if (credenciales == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Primero inicia sesión con tu matrícula y contraseña'),
-        backgroundColor: UTSCColors.naranja,
-      ));
-      return;
-    }
     final autenticado = await BiometricService.authenticate();
     if (!autenticado) return;
 
     setState(() { _cargando = true; _errorMensaje = null; });
-    final result = await ApiService.login(
-      credenciales['matricula']!,
-      credenciales['password']!,
-    );
+    final result = await ApiService.restaurarSesion();
+    if (!mounted) return;
     setState(() => _cargando = false);
 
     if (result['ok'] == true) {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
-      }
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    } else if (result['expirada'] == true) {
+      // El servidor ya no acepta la sesión rápida: se desactiva y se pide la contraseña.
+      await BiometricService.deshabilitar();
+      if (!mounted) return;
+      setState(() {
+        _bioHabilitado = false;
+        _errorMensaje = 'Tu sesión rápida expiró. Inicia sesión con tu matrícula y contraseña.';
+      });
     } else {
-      setState(() => _errorMensaje = 'Error en login biométrico. Usa tu matrícula.');
+      setState(() => _errorMensaje = result['mensaje'] ?? 'No se pudo iniciar sesión.');
     }
   }
 
@@ -86,12 +88,13 @@ class _LoginScreenState extends State<LoginScreen> {
       _passwordCtrl.text,
     );
 
+    if (!mounted) return;
     setState(() => _cargando = false);
 
     if (result['ok'] == true) {
+      _passwordCtrl.clear(); // la contraseña no debe quedarse en memoria de la pantalla
       if (_bioDisponible && !_bioHabilitado && mounted) {
-        await _ofrecerBiometrico(
-            _matriculaCtrl.text.trim(), _passwordCtrl.text);
+        await _ofrecerBiometrico();
       } else if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -103,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _ofrecerBiometrico(String matricula, String password) async {
+  Future<void> _ofrecerBiometrico() async {
     final guardar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -128,8 +131,8 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
     if (guardar == true) {
-      await BiometricService.guardarCredenciales(matricula, password);
-      setState(() => _bioHabilitado = true);
+      await BiometricService.habilitar(); // solo una bandera: no se guarda la contraseña
+      if (mounted) setState(() => _bioHabilitado = true);
     }
     if (mounted) {
       Navigator.pushReplacement(

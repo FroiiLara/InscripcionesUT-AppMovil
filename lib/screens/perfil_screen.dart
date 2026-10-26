@@ -78,7 +78,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                   const SizedBox(height: 12),
                   ElevatedButton.icon(
                     onPressed: () async {
-                      await ApiService.clearToken();
+                      await ApiService.cerrarSesion(); // revoca la sesión en el servidor
                       if (context.mounted) {
                         Navigator.pushAndRemoveUntil(context,
                             MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);

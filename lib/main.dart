@@ -1,9 +1,29 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
 import 'services/api_service.dart';
+import 'services/secure_store.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+bool _irAlLoginEnCurso = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Borra datos sensibles que versiones anteriores guardaban en texto plano.
+  await SecureStore.migrarDatosAntiguos();
+  // Si la sesión ya no se puede renovar (token vencido/revocado), volver al login.
+  ApiService.onSesionExpirada = () {
+    final nav = navigatorKey.currentState;
+    if (nav == null || _irAlLoginEnCurso) return;
+    _irAlLoginEnCurso = true;
+    nav.pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => const LoginScreen(
+            mensajeInicial: 'Tu sesión expiró. Inicia sesión de nuevo.'),
+      ),
+      (_) => false,
+    );
+    Future.delayed(const Duration(seconds: 2), () => _irAlLoginEnCurso = false);
+  };
   ApiService.wakeUp(); // despierta Render en segundo plano
   runApp(const UTSCApp());
 }
@@ -14,6 +34,7 @@ class UTSCApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'UTSC Inscripciones',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

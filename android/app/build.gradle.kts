@@ -34,6 +34,16 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+
+            // Seguridad: R8 reduce y ofusca el código Java/Kotlin y quita recursos sin usar.
+            // (El código Dart se ofusca con: flutter build apk --release --obfuscate
+            //  --split-debug-info=build/symbols  -> ver build_release.bat / build_release.sh)
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }

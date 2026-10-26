@@ -1,6 +1,13 @@
 import 'package:local_auth/local_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/log.dart';
+import 'secure_store.dart';
 
+/// Inicio de sesión con huella / rostro.
+///
+/// IMPORTANTE (seguridad): la contraseña del alumno NUNCA se guarda en el teléfono.
+/// Al activar la huella solo se marca una bandera; la sesión rápida usa el
+/// "refresh token" que el servidor entregó al iniciar sesión (guardado cifrado y que
+/// el servidor puede revocar). Si ese token vence o se revoca, se pide la contraseña.
 class BiometricService {
   static final _auth = LocalAuthentication();
 
@@ -31,46 +38,30 @@ class BiometricService {
         localizedReason: 'Usa tu huella digital o Face ID para iniciar sesión',
         options: const AuthenticationOptions(
           stickyAuth: true,
-          biometricOnly: false, // permite PIN como respaldo
+          biometricOnly: true, // sin PIN de respaldo: solo huella / rostro
           useErrorDialogs: true,
         ),
       );
-    } catch (_) {
+    } catch (e) {
+      logDebug('Biometría: $e');
       return false;
     }
   }
 
-  // ── Guardar credenciales para login biométrico ────────────
-  static Future<void> guardarCredenciales(
-      String matricula, String password) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('bio_matricula', matricula);
-    await prefs.setString('bio_password', password);
-    await prefs.setBool('bio_habilitado', true);
+  // ── Activar la sesión rápida (no guarda la contraseña) ────
+  static Future<void> habilitar() async {
+    await SecureStore.guardar(SecureStore.kBioHabilitado, 'true');
   }
 
-  // ── Obtener credenciales guardadas ────────────────────────
-  static Future<Map<String, String>?> obtenerCredenciales() async {
-    final prefs = await SharedPreferences.getInstance();
-    final habilitado = prefs.getBool('bio_habilitado') ?? false;
-    if (!habilitado) return null;
-    final matricula = prefs.getString('bio_matricula');
-    final password  = prefs.getString('bio_password');
-    if (matricula == null || password == null) return null;
-    return {'matricula': matricula, 'password': password};
-  }
-
-  // ── Verificar si el biométrico está habilitado ────────────
+  // ── ¿Está activada y hay una sesión que renovar? ──────────
   static Future<bool> estaHabilitado() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('bio_habilitado') ?? false;
+    final bandera = await SecureStore.leer(SecureStore.kBioHabilitado);
+    final refresh = await SecureStore.leer(SecureStore.kRefreshToken);
+    return bandera == 'true' && refresh != null && refresh.isNotEmpty;
   }
 
-  // ── Deshabilitar biométrico ───────────────────────────────
+  // ── Desactivar ────────────────────────────────────────────
   static Future<void> deshabilitar() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('bio_habilitado', false);
-    await prefs.remove('bio_matricula');
-    await prefs.remove('bio_password');
+    await SecureStore.borrar(SecureStore.kBioHabilitado);
   }
 }

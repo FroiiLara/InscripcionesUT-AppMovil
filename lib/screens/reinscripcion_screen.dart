@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart' show ImagePicker, ImageSource, XFile;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/colors.dart';
+import '../services/api_service.dart';
 import 'inscripcion_screen.dart'
     show UTSCStepper, UTSCSeccion, UTSCCampo, UTSCFilePicker, UTSCResumen;
 
@@ -60,6 +62,23 @@ class _ReinscripcionScreenState extends State<ReinscripcionScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _precargarDatos();
+  }
+
+  // La matrícula y el nombre vienen de la cuenta (el servidor exige que la matrícula
+  // de la reinscripción sea la de la sesión).
+  Future<void> _precargarDatos() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      if (_matriculaCtrl.text.isEmpty) _matriculaCtrl.text = prefs.getString('matricula') ?? '';
+      if (_nombreCtrl.text.isEmpty) _nombreCtrl.text = prefs.getString('usuario_nombre') ?? '';
+    });
+  }
+
+  @override
   void dispose() {
     _matriculaCtrl.dispose(); _nombreCtrl.dispose(); _refCtrl.dispose();
     super.dispose();
@@ -82,7 +101,7 @@ class _ReinscripcionScreenState extends State<ReinscripcionScreen> {
   }
 
   bool _validarP3() {
-    if (_refCtrl.text.trim().isEmpty) { _err('Ingresa la referencia de pago'); return false; }
+    if (_refCtrl.text.trim().length < 3) { _err('Ingresa la referencia de pago (mínimo 3 caracteres)'); return false; }
     if (_fechaPago == null) { _err('Selecciona la fecha de pago'); return false; }
     if (_comprobante == null) { _err('Sube el comprobante de pago'); return false; }
     return true;
@@ -96,10 +115,34 @@ class _ReinscripcionScreenState extends State<ReinscripcionScreen> {
     if (ok) setState(() => _paso++);
   }
 
+  static String _fechaIso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   Future<void> _enviar() async {
+    if (_enviando) return;
+    if (!_validarP1() || !_validarP2() || !_validarP3()) return;
     setState(() => _enviando = true);
-    await Future.delayed(const Duration(seconds: 2));
+
+    // El servidor vuelve a validar todo; esto es solo comodidad para el alumno.
+    final resultado = await ApiService.enviarReinscripcion(
+      matricula: _matriculaCtrl.text.trim(),
+      nombre: _nombreCtrl.text.trim(),
+      carreraClave: _carrera!,
+      cuatrimestre: _cuatrimestre!,
+      esEstadia: _esEstadia,
+      materias: _esEstadia ? <String>[] : _materias.toList(),
+      referenciaPago: _refCtrl.text.trim(),
+      fechaPago: _fechaIso(_fechaPago!),
+      comprobante: _comprobante!,
+    );
+    if (!mounted) return;
     setState(() => _enviando = false);
+
+    if (resultado['ok'] != true) {
+      _err(resultado['mensaje']?.toString() ?? 'No se pudo enviar la reinscripción.');
+      return;
+    }
+    final folio = resultado['folio']?.toString();
     if (mounted) {
       showDialog(
         context: context, barrierDismissible: false,
@@ -108,7 +151,9 @@ class _ReinscripcionScreenState extends State<ReinscripcionScreen> {
             Icon(Icons.check_circle, color: UTSCColors.aprobada, size: 28),
             SizedBox(width: 8), Text('¡Solicitud enviada!'),
           ]),
-          content: const Text('Tu reinscripción fue recibida. Recibirás un correo con tu folio REINSC-.'),
+          content: Text(folio != null
+              ? 'Tu reinscripción fue recibida.\n\nFolio: $folio\n\nRecibirás un correo de confirmación.'
+              : 'Tu reinscripción fue recibida. Recibirás un correo con tu folio REINSC-.'),
           actions: [ElevatedButton(
             onPressed: () { Navigator.pop(context); Navigator.pop(context); },
             child: const Text('Aceptar'),
@@ -312,7 +357,9 @@ class _ReinscripcionScreenState extends State<ReinscripcionScreen> {
         label: 'Comprobante de Pago * (JPG o PNG)', archivo: _comprobante,
         onSeleccionar: () async {
           final picker = ImagePicker();
-          final f = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+          // Se limita el tamaño: el servidor rechaza documentos de más de 5 MB.
+          final f = await picker.pickImage(
+              source: ImageSource.gallery, maxWidth: 2000, maxHeight: 2000, imageQuality: 85);
           if (f != null) setState(() => _comprobante = f);
         },
       ),

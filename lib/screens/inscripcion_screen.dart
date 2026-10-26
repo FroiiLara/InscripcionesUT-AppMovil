@@ -23,6 +23,8 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
   XFile?    _foto;
   String?   _curpMsg;
   Color     _curpColor = UTSCColors.textoGris;
+  // Privacidad: la CURP solo se envía al servicio externo (RENAPO) si el alumno lo autoriza.
+  bool      _curpExterno = false;
 
   // Paso 2
   String? _carrera;
@@ -54,6 +56,10 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
     if (curp.length < 18) { setState(() { _curpMsg = null; }); return; }
     if (!regex.hasMatch(curp)) {
       setState(() { _curpMsg = 'Formato de CURP inválido'; _curpColor = UTSCColors.error; });
+      return;
+    }
+    if (!_curpExterno) {
+      setState(() { _curpMsg = null; });
       return;
     }
     setState(() { _curpMsg = 'Verificando con RENAPO...'; _curpColor = UTSCColors.textoGris; });
@@ -114,7 +120,9 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
 
   Future<XFile?> _elegirArchivo() async {
     final picker = ImagePicker();
-    return await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+    // Se limita el tamaño: el servidor rechaza documentos de más de 5 MB.
+    return await picker.pickImage(
+        source: ImageSource.gallery, maxWidth: 2000, maxHeight: 2000, imageQuality: 85);
   }
 
   // ── Edad mínima para inscribirse ──
@@ -175,10 +183,37 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
     if (ok) setState(() => _paso++);
   }
 
+  static String _fechaIso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   Future<void> _enviar() async {
+    if (_enviando) return;
+    if (!_validarP1() || !_validarP2() || !_validarP3()) return;
     setState(() => _enviando = true);
-    await Future.delayed(const Duration(seconds: 2));
+
+    // El servidor vuelve a validar TODO (edad, CURP, teléfono, archivos...): lo que se
+    // revisa aquí es solo comodidad para el alumno.
+    final resultado = await ApiService.enviarInscripcion(
+      nombre: _nombreCtrl.text.trim(),
+      curp: _curpCtrl.text.trim().toUpperCase(),
+      fechaNacimiento: _fechaIso(_fechaNac!),
+      telefono: _telCtrl.text.trim(),
+      carrera: _carrera!,
+      contactoNombre: _contactoNombreCtrl.text.trim(),
+      contactoTel: _contactoTelCtrl.text.trim(),
+      fotografia: _foto!,
+      acta: _acta!,
+      certificado: _cert!,
+      comprobante: _comprobante!,
+    );
+    if (!mounted) return;
     setState(() => _enviando = false);
+
+    if (resultado['ok'] != true) {
+      _err(resultado['mensaje']?.toString() ?? 'No se pudo enviar la solicitud.');
+      return;
+    }
+    final folio = resultado['folio']?.toString();
     if (mounted) {
       showDialog(
         context: context, barrierDismissible: false,
@@ -187,7 +222,9 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
             Icon(Icons.check_circle, color: UTSCColors.aprobada, size: 28),
             SizedBox(width: 8), Text('¡Solicitud enviada!'),
           ]),
-          content: const Text('Tu solicitud fue recibida. Recibirás un correo con tu folio.'),
+          content: Text(folio != null
+              ? 'Tu solicitud fue recibida.\n\nFolio: $folio\n\nRecibirás un correo de confirmación.'
+              : 'Tu solicitud fue recibida. Recibirás un correo con tu folio.'),
           actions: [ElevatedButton(
             onPressed: () { Navigator.pop(context); Navigator.pop(context); },
             child: const Text('Aceptar'),
@@ -246,6 +283,28 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
         const SizedBox(height: 4),
         Text(_curpMsg!, style: TextStyle(fontSize: 12, color: _curpColor)),
       ],
+      CheckboxListTile(
+        value: _curpExterno,
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
+        activeColor: UTSCColors.verde,
+        title: const Text(
+          'Opcional: autorizo enviar únicamente mi CURP a un servicio externo '
+          '(consultacurp.com.mx) para comprobar que existe. Si no lo autorizo, '
+          'solo se valida su formato y puedes continuar.',
+          style: TextStyle(fontSize: 11.5, color: UTSCColors.textoGris),
+        ),
+        onChanged: (v) {
+          setState(() => _curpExterno = v ?? false);
+          final curp = _curpCtrl.text.trim().toUpperCase();
+          if (_curpExterno && curp.length == 18) {
+            _validarCurp(curp);
+          } else {
+            setState(() => _curpMsg = null);
+          }
+        },
+      ),
       const SizedBox(height: 14),
       UTSCCampo(label: 'Fecha de Nacimiento *', child: InkWell(
         onTap: () async {
