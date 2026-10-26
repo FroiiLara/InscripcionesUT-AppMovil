@@ -16,8 +16,10 @@ class BiometricService {
     try {
       final canCheck = await _auth.canCheckBiometrics;
       final isSupported = await _auth.isDeviceSupported();
+      logDebug('Biometría: canCheck=$canCheck, supported=$isSupported');
       return canCheck && isSupported;
-    } catch (_) {
+    } catch (e) {
+      logDebug('Biometría isAvailable falló: $e');
       return false;
     }
   }
