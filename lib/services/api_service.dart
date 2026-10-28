@@ -45,11 +45,19 @@ class ApiService {
     await prefs.remove('matricula');
   }
 
-  /// Cierra la sesión también en el servidor (revoca los tokens) y limpia el teléfono.
+  /// Cierra la sesión.
+  /// - Con la huella activada: solo "bloquea" la app (borra el access token) y conserva el
+  ///   refresh token cifrado, para poder volver a entrar con la huella sin contraseña.
+  /// - Sin huella: revoca los tokens en el servidor y limpia todo el teléfono.
   static Future<void> cerrarSesion() async {
+    final bandera = await SecureStore.leer(SecureStore.kBioHabilitado);
+    final refresh = await SecureStore.leer(SecureStore.kRefreshToken);
+    if (bandera == 'true' && refresh != null && refresh.isNotEmpty) {
+      await SecureStore.borrar(SecureStore.kAccessToken);
+      return;
+    }
     _cerrandoSesion = true;
     try {
-      final refresh = await SecureStore.leer(SecureStore.kRefreshToken);
       await _conAuth((h) => http
           .post(Uri.parse('$baseUrl/api/logout'),
               headers: h, body: jsonEncode({'refresh_token': refresh}))
