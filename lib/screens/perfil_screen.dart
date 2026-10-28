@@ -44,7 +44,9 @@ class _PerfilScreenState extends State<PerfilScreen> {
                   Text(_perfil?['usuario'] ?? 'Usuario',
                       style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: UTSCColors.verde)),
                   const SizedBox(height: 4),
-                  Text(_perfil?['es_admin'] == true ? 'Administrador' : 'Alumno',
+                  Text(_perfil?['rol'] == 'super_admin'
+                      ? 'Super Administrador'
+                      : (_perfil?['es_admin'] == true ? 'Administrador' : 'Alumno'),
                       style: const TextStyle(color: UTSCColors.textoGris, fontSize: 14)),
                   const SizedBox(height: 28),
                   Card(
