@@ -42,6 +42,7 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('usuario_nombre');
     await prefs.remove('es_admin');
+    await prefs.remove('rol');
     await prefs.remove('matricula');
   }
 
@@ -89,6 +90,18 @@ class ApiService {
     if (data.containsKey('es_admin')) {
       await prefs.setBool('es_admin', data['es_admin'].toString() == 'true');
     }
+    if (data['rol'] != null) {
+      await prefs.setString('rol', data['rol'].toString());
+    }
+  }
+
+  /// Rol de la sesión: 'alumno', 'admin' o 'super_admin'. Si la app guardó la sesión
+  /// con una versión anterior (sin rol), se deduce de es_admin.
+  static Future<String> getRol() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rol = prefs.getString('rol');
+    if (rol == 'alumno' || rol == 'admin' || rol == 'super_admin') return rol!;
+    return (prefs.getBool('es_admin') ?? false) ? 'admin' : 'alumno';
   }
 
   static Map<String, dynamic> _json(http.Response r) {
@@ -192,6 +205,7 @@ class ApiService {
           'usuario': data['usuario'],
           'matricula': data['matricula'],
           'es_admin': data['es_admin'],
+          'rol': data['rol'],
         };
       }
       if (response.statusCode == 429) {
@@ -495,6 +509,50 @@ class ApiService {
       return {'ok': false, 'mensaje': 'Error de conexión. Intenta de nuevo.'};
     }
   }
+
+  // ── SUPER ADMIN (usuarios y roles) ────────────────────────
+  static Future<Map<String, dynamic>?> getUsuarios(
+      {String q = '', String rol = ''}) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/superadmin/usuarios').replace(
+          queryParameters: {if (q.isNotEmpty) 'q': q, if (rol.isNotEmpty) 'rol': rol});
+      final response = await _conAuth(
+          (h) => http.get(uri, headers: h).timeout(const Duration(seconds: 30)));
+      if (response.statusCode == 200) return _json(response);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>> _accionUsuario(
+      String accion, Map<String, dynamic> cuerpo) async {
+    try {
+      final response = await _conAuth((h) => http
+          .post(Uri.parse('$baseUrl/api/superadmin/usuarios/$accion'),
+              headers: h, body: jsonEncode(cuerpo))
+          .timeout(const Duration(seconds: 30)));
+      final data = _json(response);
+      return {
+        'ok': response.statusCode == 200 && data['ok'] == true,
+        'mensaje': data['mensaje'] ?? 'No se pudo completar la acción.',
+      };
+    } catch (_) {
+      return {'ok': false, 'mensaje': 'Error de conexión. Intenta de nuevo.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> cambiarRolUsuario(String matricula, String rol) =>
+      _accionUsuario('rol', {'matricula': matricula, 'rol': rol});
+
+  static Future<Map<String, dynamic>> desbloquearUsuario(String matricula) =>
+      _accionUsuario('desbloquear', {'matricula': matricula});
+
+  static Future<Map<String, dynamic>> cerrarSesionesUsuario(String matricula) =>
+      _accionUsuario('cerrar_sesiones', {'matricula': matricula});
+
+  static Future<Map<String, dynamic>> eliminarUsuario(String matricula) =>
+      _accionUsuario('eliminar', {'matricula': matricula});
 
   // ── RECUPERAR CONTRASEÑA ──────────────────────────────────
   static Future<Map<String, dynamic>> recuperarContrasena(String email) async {

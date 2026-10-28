@@ -8,6 +8,7 @@ import 'historial_screen.dart';
 import 'perfil_screen.dart';
 import 'soporte_screen.dart';
 import 'admin_panel_screen.dart';
+import 'superadmin_screen.dart';
 import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -19,7 +20,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int    _tabActual     = 0;
   String _nombreUsuario = '';
-  bool   _esAdmin       = false;
+  String _rol           = 'alumno'; // alumno | admin | super_admin
+  bool   _cargado       = false;
 
   @override
   void initState() {
@@ -29,9 +31,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _cargarDatos() async {
     final prefs = await SharedPreferences.getInstance();
+    final rol = await ApiService.getRol();
+    if (!mounted) return;
     setState(() {
       _nombreUsuario = prefs.getString('usuario_nombre') ?? 'Usuario';
-      _esAdmin       = prefs.getBool('es_admin') ?? false;
+      _rol           = rol;
+      _cargado       = true;
     });
   }
 
@@ -63,26 +68,46 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  List<Widget> get _pantallas => [
-    _PantallaInicio(nombreUsuario: _nombreUsuario, esAdmin: _esAdmin),
-    const HistorialScreen(),
-    const PerfilScreen(),
-    if (_esAdmin) const AdminPanelScreen(),
-  ];
+  int get _indice => _tabActual >= _pestanas.length ? 0 : _tabActual;
 
-  List<BottomNavigationBarItem> get _navItems => [
-    const BottomNavigationBarItem(
-        icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Inicio'),
-    const BottomNavigationBarItem(
-        icon: Icon(Icons.history_outlined), activeIcon: Icon(Icons.history), label: 'Historial'),
-    const BottomNavigationBarItem(
-        icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Perfil'),
-    if (_esAdmin)
-      const BottomNavigationBarItem(
-          icon: Icon(Icons.admin_panel_settings_outlined),
-          activeIcon: Icon(Icons.admin_panel_settings),
-          label: 'Admin'),
-  ];
+  // Pestañas según el rol:
+  //  alumno      → Inicio (trámites) · Historial · Perfil
+  //  admin       → Inicio · Solicitudes (panel, dashboard y reportes) · Perfil
+  //  super_admin → Usuarios (roles y cuentas) · Perfil
+  List<_Pestana> get _pestanas {
+    const inicioItem = BottomNavigationBarItem(
+        icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Inicio');
+    const perfilItem = BottomNavigationBarItem(
+        icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Perfil');
+    final inicio = _Pestana('inicio', _PantallaInicio(nombreUsuario: _nombreUsuario, rol: _rol), inicioItem);
+    final perfil = _Pestana('perfil', const PerfilScreen(), perfilItem);
+
+    if (_rol == 'super_admin') {
+      return [
+        _Pestana('usuarios', const SuperAdminScreen(), const BottomNavigationBarItem(
+            icon: Icon(Icons.manage_accounts_outlined),
+            activeIcon: Icon(Icons.manage_accounts),
+            label: 'Usuarios')),
+        perfil,
+      ];
+    }
+    if (_rol == 'admin') {
+      return [
+        inicio,
+        _Pestana('admin', const AdminPanelScreen(), const BottomNavigationBarItem(
+            icon: Icon(Icons.admin_panel_settings_outlined),
+            activeIcon: Icon(Icons.admin_panel_settings),
+            label: 'Solicitudes')),
+        perfil,
+      ];
+    }
+    return [
+      inicio,
+      _Pestana('historial', const HistorialScreen(), const BottomNavigationBarItem(
+          icon: Icon(Icons.history_outlined), activeIcon: Icon(Icons.history), label: 'Historial')),
+      perfil,
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -114,7 +139,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             onSelected: (val) {
-              if (val == 'perfil') setState(() => _tabActual = 2);
+              if (val == 'perfil') {
+                final i = _pestanas.indexWhere((t) => t.id == 'perfil');
+                if (i >= 0) setState(() => _tabActual = i);
+              }
               if (val == 'cerrar') _cerrarSesion();
             },
             itemBuilder: (_) => [
@@ -136,24 +164,35 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 4),
         ],
       ),
-      body: _pantallas[_tabActual],
+      body: !_cargado
+          ? const Center(child: CircularProgressIndicator(color: UTSCColors.verde))
+          : _pestanas[_indice].pantalla,
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _tabActual,
+        currentIndex: _indice,
         onTap: (i) => setState(() => _tabActual = i),
         selectedItemColor: UTSCColors.verde,
         unselectedItemColor: UTSCColors.textoGris,
         type: BottomNavigationBarType.fixed,
-        items: _navItems,
+        items: _pestanas.map((t) => t.item).toList(),
       ),
     );
   }
 }
 
-// ── Pantalla de inicio (tab 0) ────────────────────────────────
+class _Pestana {
+  final String id;
+  final Widget pantalla;
+  final BottomNavigationBarItem item;
+  const _Pestana(this.id, this.pantalla, this.item);
+}
+
+// ── Pantalla de inicio ─────────────────────────────────────────
 class _PantallaInicio extends StatelessWidget {
   final String nombreUsuario;
-  final bool esAdmin;
-  const _PantallaInicio({required this.nombreUsuario, required this.esAdmin});
+  final String rol;
+  const _PantallaInicio({required this.nombreUsuario, required this.rol});
+
+  bool get _esAlumno => rol == 'alumno';
 
   @override
   Widget build(BuildContext context) {
@@ -183,13 +222,14 @@ class _PantallaInicio extends StatelessWidget {
                 Text(nombreUsuario,
                     style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
-                Text(esAdmin ? 'Panel Administrativo' : 'Sistema de Inscripciones UTSC',
+                Text(_esAlumno ? 'Sistema de Inscripciones UTSC' : 'Control Escolar · Panel Administrativo',
                     style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12)),
               ],
             ),
           ),
           const SizedBox(height: 24),
 
+          if (_esAlumno) ...[
           const Text('Trámites',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: UTSCColors.texto)),
           const SizedBox(height: 14),
@@ -213,6 +253,7 @@ class _PantallaInicio extends StatelessWidget {
                 context, MaterialPageRoute(builder: (_) => const ReinscripcionScreen())),
           ),
           const SizedBox(height: 24),
+          ],
 
           const Text('Información UTSC',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: UTSCColors.texto)),
