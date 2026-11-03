@@ -510,6 +510,66 @@ class ApiService {
     }
   }
 
+  // ── CONSULTAS Y PREGUNTAS FRECUENTES ──────────────────────
+  static Future<Map<String, dynamic>?> _getJson(String ruta, [Map<String, String>? query]) async {
+    try {
+      final uri = Uri.parse('$baseUrl$ruta').replace(queryParameters: query);
+      final response = await _conAuth(
+          (h) => http.get(uri, headers: h).timeout(const Duration(seconds: 30)));
+      if (response.statusCode == 200) return _json(response);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>> _postJson(String ruta, Map<String, dynamic> cuerpo) async {
+    try {
+      final response = await _conAuth((h) => http
+          .post(Uri.parse('$baseUrl$ruta'), headers: h, body: jsonEncode(cuerpo))
+          .timeout(const Duration(seconds: 30)));
+      final data = _json(response);
+      return {
+        ...data,
+        'ok': (response.statusCode == 200 || response.statusCode == 201) && data['ok'] == true,
+        'mensaje': data['mensaje'] ?? 'No se pudo completar la acción.',
+      };
+    } catch (_) {
+      return {'ok': false, 'mensaje': 'Error de conexión. Intenta de nuevo.'};
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getFaqs({String q = '', String categoria = ''}) =>
+      _getJson('/api/faqs', {if (q.isNotEmpty) 'q': q, if (categoria.isNotEmpty) 'categoria': categoria});
+
+  static Future<Map<String, dynamic>?> getConsultas() => _getJson('/api/consultas');
+
+  static Future<Map<String, dynamic>> crearConsulta(String categoria, String asunto, String mensaje) =>
+      _postJson('/api/consultas', {'categoria': categoria, 'asunto': asunto, 'mensaje': mensaje});
+
+  /// [admin] true usa las rutas de Control Escolar.
+  static Future<Map<String, dynamic>?> getConsulta(String folio, {bool admin = false}) =>
+      _getJson(admin ? '/api/admin/consultas/$folio' : '/api/consultas/$folio');
+
+  static Future<Map<String, dynamic>> enviarMensaje(String folio, String texto,
+          {bool admin = false, bool cerrar = false}) =>
+      _postJson(admin ? '/api/admin/consultas/$folio/mensajes' : '/api/consultas/$folio/mensajes',
+          {'texto': texto, if (admin && cerrar) 'cerrar': true});
+
+  static Future<Map<String, dynamic>> cerrarConsulta(String folio) =>
+      _postJson('/api/consultas/$folio/cerrar', {});
+
+  static Future<Map<String, dynamic>> cambiarEstatusConsulta(String folio, String estatus) =>
+      _postJson('/api/admin/consultas/$folio/estatus', {'estatus': estatus});
+
+  static Future<Map<String, dynamic>?> getConsultasAdmin({String estatus = '', String q = ''}) =>
+      _getJson('/api/admin/consultas', {if (estatus.isNotEmpty) 'estatus': estatus, if (q.isNotEmpty) 'q': q});
+
+  static Future<Map<String, dynamic>?> getFaqsAdmin() => _getJson('/api/admin/faqs');
+
+  static Future<Map<String, dynamic>> faqAdmin(String accion, Map<String, dynamic> datos) =>
+      _postJson('/api/admin/faqs', {'accion': accion, ...datos});
+
   // ── SUPER ADMIN (usuarios y roles) ────────────────────────
   static Future<Map<String, dynamic>?> getUsuarios(
       {String q = '', String rol = ''}) async {

@@ -9,6 +9,8 @@ import 'perfil_screen.dart';
 import 'soporte_screen.dart';
 import 'admin_panel_screen.dart';
 import 'superadmin_screen.dart';
+import 'ayuda_screen.dart';
+import 'consultas_admin_screen.dart';
 import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -71,8 +73,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int get _indice => _tabActual >= _pestanas.length ? 0 : _tabActual;
 
   // Pestañas según el rol:
-  //  alumno      → Inicio (trámites) · Historial · Perfil
-  //  admin       → Inicio · Solicitudes (panel, dashboard y reportes) · Perfil
+  //  alumno      → Inicio (trámites) · Historial · Ayuda (FAQ y consultas) · Perfil
+  //  admin       → Inicio · Solicitudes · Consultas (bandeja y FAQ) · Perfil
   //  super_admin → Usuarios (roles y cuentas) · Perfil
   List<_Pestana> get _pestanas {
     const inicioItem = BottomNavigationBarItem(
@@ -98,6 +100,8 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.admin_panel_settings_outlined),
             activeIcon: Icon(Icons.admin_panel_settings),
             label: 'Solicitudes')),
+        _Pestana('consultas', const ConsultasAdminScreen(), const BottomNavigationBarItem(
+            icon: Icon(Icons.forum_outlined), activeIcon: Icon(Icons.forum), label: 'Consultas')),
         perfil,
       ];
     }
@@ -105,6 +109,8 @@ class _HomeScreenState extends State<HomeScreen> {
       inicio,
       _Pestana('historial', const HistorialScreen(), const BottomNavigationBarItem(
           icon: Icon(Icons.history_outlined), activeIcon: Icon(Icons.history), label: 'Historial')),
+      _Pestana('ayuda', const AyudaScreen(), const BottomNavigationBarItem(
+          icon: Icon(Icons.help_outline), activeIcon: Icon(Icons.help), label: 'Ayuda')),
       perfil,
     ];
   }
