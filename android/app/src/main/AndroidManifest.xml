@@ -2,6 +2,29 @@
 <uses-permission android:name="android.permission.INTERNET"/>
 <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
 <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
+
+    <!-- ===== Permisos de la app (se piden en tiempo de ejecución, ver PERMISOS.md) ===== -->
+    <!-- Cámara: foto y documentos de la inscripción -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Micrófono: dictado por voz en consultas -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- GPS: ruta hacia la UTSC (solo en uso, sin segundo plano) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- Almacenamiento: Android 13+ usa permisos de medios; Android 12 y anteriores, el de lectura -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+    <!-- Contactos: elegir contacto de emergencia (solo lectura) -->
+    <uses-permission android:name="android.permission.READ_CONTACTS"/>
+    <!-- SMS y llamadas: contacto con Control Escolar desde Soporte -->
+    <uses-permission android:name="android.permission.SEND_SMS"/>
+    <uses-permission android:name="android.permission.CALL_PHONE"/>
+
+    <!-- El hardware es opcional: la app también se instala en equipos sin cámara, GPS o telefonía -->
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <uses-feature android:name="android.hardware.location.gps" android:required="false"/>
+    <uses-feature android:name="android.hardware.telephony" android:required="false"/>
+    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
     <application
         android:label="utsc_inscripciones"
         android:name="${applicationName}"
@@ -49,6 +72,10 @@
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>
         </intent>
+        <!-- Llamadas, SMS, mapas y reconocimiento de voz (visibilidad de paquetes, Android 11+) -->
+        <intent><action android:name="android.intent.action.DIAL"/><data android:scheme="tel"/></intent>
+        <intent><action android:name="android.intent.action.SENDTO"/><data android:scheme="sms"/></intent>
+        <intent><action android:name="android.speech.RecognitionService"/></intent>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

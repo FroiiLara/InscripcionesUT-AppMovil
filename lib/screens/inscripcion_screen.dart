@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:image_picker/image_picker.dart';
+import '../services/permisos_service.dart';
 import '../constants/colors.dart';
 import '../services/api_service.dart';
 
@@ -98,6 +100,7 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
               title: const Text('Tomar foto con cámara'),
               onTap: () async {
                 Navigator.pop(context);
+                if (!await PermisosService.asegurar(this.context, AppPermiso.camara)) return;
                 final f = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 800, imageQuality: 85);
                 if (f != null) setState(() => _foto = f);
               },
@@ -107,6 +110,7 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
               title: const Text('Seleccionar de galería'),
               onTap: () async {
                 Navigator.pop(context);
+                if (!await PermisosService.asegurar(this.context, AppPermiso.almacenamiento)) return;
                 final f = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 800, imageQuality: 85);
                 if (f != null) setState(() => _foto = f);
               },
@@ -119,10 +123,28 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
   }
 
   Future<XFile?> _elegirArchivo() async {
+    if (!await PermisosService.asegurar(context, AppPermiso.almacenamiento)) return null;
     final picker = ImagePicker();
     // Se limita el tamaño: el servidor rechaza documentos de más de 5 MB.
     return await picker.pickImage(
         source: ImageSource.gallery, maxWidth: 2000, maxHeight: 2000, imageQuality: 85);
+  }
+
+  /// Llena el contacto de emergencia desde la agenda (pide permiso de contactos).
+  Future<void> _elegirContacto() async {
+    if (!await PermisosService.asegurar(context, AppPermiso.contactos)) return;
+    try {
+      final c = await FlutterContacts.openExternalPick();
+      if (c == null) return;
+      final digitos = (c.phones.isNotEmpty ? c.phones.first.number : '').replaceAll(RegExp(r'\D'), '');
+      setState(() {
+        _contactoNombreCtrl.text = c.displayName;
+        _contactoTelCtrl.text = digitos.length >= 10 ? digitos.substring(digitos.length - 10) : digitos;
+      });
+      if (digitos.length < 10 && mounted) _err('El contacto no tiene un teléfono de 10 dígitos; captúralo manualmente.');
+    } catch (_) {
+      if (mounted) _err('No se pudo abrir tu agenda. Captura los datos manualmente.');
+    }
   }
 
   // ── Edad mínima para inscribirse ──
@@ -383,6 +405,15 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
         onChanged: (v) => setState(() => _carrera = v),
       )),
       const SizedBox(height: 14),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          onPressed: _elegirContacto,
+          icon: const Icon(Icons.contacts_outlined, color: UTSCColors.verde),
+          label: const Text('Elegir de mis contactos', style: TextStyle(color: UTSCColors.verde)),
+        ),
+      ),
+      const SizedBox(height: 10),
       UTSCCampo(label: 'Nombre del Contacto de Emergencia *', child: TextFormField(
         controller: _contactoNombreCtrl, textCapitalization: TextCapitalization.words,
         decoration: const InputDecoration(hintText: 'Ej. María López',

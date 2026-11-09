@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart';
+import '../services/permisos_service.dart';
 import '../constants/colors.dart';
 import '../services/api_service.dart';
 
@@ -18,9 +20,50 @@ class _NuevaConsultaScreenState extends State<NuevaConsultaScreen> {
   final _mensaje = TextEditingController();
   String? _categoria;
   bool _enviando = false;
+  final SpeechToText _voz = SpeechToText();
+  bool _escuchando = false;
+  String _baseDictado = '';
+
+  /// Dictado por voz: pide permiso de micrófono y convierte la voz en texto del mensaje.
+  Future<void> _dictar() async {
+    if (_escuchando) {
+      await _voz.stop();
+      setState(() => _escuchando = false);
+      return;
+    }
+    if (!await PermisosService.asegurar(context, AppPermiso.microfono)) return;
+    final disponible = await _voz.initialize(
+      onStatus: (s) {
+        if ((s == 'done' || s == 'notListening') && mounted) setState(() => _escuchando = false);
+      },
+      onError: (_) {
+        if (mounted) setState(() => _escuchando = false);
+      },
+    );
+    if (!disponible) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('El dictado por voz no está disponible en este dispositivo. Escribe tu mensaje.')));
+      }
+      return;
+    }
+    _baseDictado = _mensaje.text.trim();
+    setState(() => _escuchando = true);
+    await _voz.listen(
+      localeId: 'es_MX',
+      listenFor: const Duration(seconds: 60),
+      onResult: (r) {
+        final dictado = r.recognizedWords;
+        final texto = _baseDictado.isEmpty ? dictado : '$_baseDictado $dictado';
+        _mensaje.text = texto.length > 2000 ? texto.substring(0, 2000) : texto;
+        _mensaje.selection = TextSelection.collapsed(offset: _mensaje.text.length);
+      },
+    );
+  }
 
   @override
   void dispose() {
+    _voz.cancel();
     _asunto.dispose();
     _mensaje.dispose();
     super.dispose();
@@ -79,9 +122,15 @@ class _NuevaConsultaScreenState extends State<NuevaConsultaScreen> {
               maxLength: 2000,
               minLines: 6,
               maxLines: 10,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                   labelText: 'Describe tu duda',
                   alignLabelWithHint: true,
+                  suffixIcon: IconButton(
+                    tooltip: _escuchando ? 'Detener dictado' : 'Dictar por voz',
+                    icon: Icon(_escuchando ? Icons.mic : Icons.mic_none,
+                        color: _escuchando ? UTSCColors.error : UTSCColors.verde),
+                    onPressed: _dictar,
+                  ),
                   border: OutlineInputBorder(),
                   filled: true,
                   fillColor: Colors.white),

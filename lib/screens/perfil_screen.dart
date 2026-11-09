@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../constants/colors.dart';
 import '../services/api_service.dart';
 import 'login_screen.dart';
+import 'permisos_screen.dart';
 
 class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
@@ -66,6 +67,18 @@ class _PerfilScreenState extends State<PerfilScreen> {
                     ),
                   ),
                   const SizedBox(height: 28),
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.push(
+                        context, MaterialPageRoute(builder: (_) => const PermisosScreen())),
+                    icon: const Icon(Icons.shield_outlined, color: UTSCColors.verde),
+                    label: const Text('Permisos de la aplicación', style: TextStyle(color: UTSCColors.verde)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: UTSCColors.verde),
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Abriendo aviso de privacidad...'))),

@@ -1,8 +1,54 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../constants/colors.dart';
+import '../services/permisos_service.dart';
 
 class SoporteScreen extends StatelessWidget {
   const SoporteScreen({super.key});
+
+  static const _telefono = '8181248400';
+  static const _direccion = 'Universidad Tecnológica de Santa Catarina, Carretera Monterrey-Saltillo Km 61.5, Santa Catarina, Nuevo León';
+
+  void _aviso(BuildContext c, String t) =>
+      ScaffoldMessenger.of(c).showSnackBar(SnackBar(content: Text(t)));
+
+  /// Llamada: se pide el permiso de llamadas (Android) y se abre el marcador.
+  Future<void> _llamar(BuildContext context) async {
+    await PermisosService.asegurar(context, AppPermiso.llamadas);
+    // Aunque el permiso se niegue, el marcador del sistema sigue disponible (alternativa).
+    final ok = await launchUrl(Uri(scheme: 'tel', path: _telefono));
+    if (!ok && context.mounted) _aviso(context, 'No se pudo abrir el marcador. Llama al (81) 81-24-84-00.');
+  }
+
+  Future<void> _sms(BuildContext context) async {
+    await PermisosService.asegurar(context, AppPermiso.sms);
+    final cuerpo = Uri.encodeComponent('Hola, tengo una duda sobre mi trámite en el Sistema de Inscripciones UTSC.');
+    final ok = await launchUrl(Uri.parse('sms:$_telefono?body=$cuerpo'));
+    if (!ok && context.mounted) _aviso(context, 'No se pudo abrir la app de mensajes.');
+  }
+
+  /// Ruta: con GPS traza desde la posición actual; sin permiso abre solo el destino.
+  Future<void> _comoLlegar(BuildContext context) async {
+    final destino = Uri.encodeComponent(_direccion);
+    String url = 'https://www.google.com/maps/dir/?api=1&destination=$destino';
+    final permitido = await PermisosService.asegurar(context, AppPermiso.ubicacion);
+    if (permitido) {
+      try {
+        if (!await Geolocator.isLocationServiceEnabled()) {
+          if (context.mounted) _aviso(context, 'Activa el GPS del dispositivo para trazar la ruta desde tu ubicación.');
+        } else {
+          final pos = await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.high, timeLimit: const Duration(seconds: 15));
+          url += '&origin=${pos.latitude},${pos.longitude}';
+        }
+      } catch (_) {
+        if (context.mounted) _aviso(context, 'No se pudo obtener tu ubicación. Se muestra solo la universidad.');
+      }
+    }
+    final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) _aviso(context, 'No se pudo abrir el mapa.');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +88,22 @@ class SoporteScreen extends StatelessWidget {
                 ),
               ),
             ),
+            const SizedBox(height: 14),
+            Row(children: [
+              Expanded(child: ElevatedButton.icon(
+                onPressed: () => _llamar(context),
+                icon: const Icon(Icons.call),
+                label: const Text('Llamar'),
+                style: ElevatedButton.styleFrom(backgroundColor: UTSCColors.verde, foregroundColor: Colors.white),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: ElevatedButton.icon(
+                onPressed: () => _sms(context),
+                icon: const Icon(Icons.sms),
+                label: const Text('Enviar SMS'),
+                style: ElevatedButton.styleFrom(backgroundColor: UTSCColors.verde, foregroundColor: Colors.white),
+              )),
+            ]),
             const SizedBox(height: 24),
             const Text('Horario de Atención',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: UTSCColors.verde)),
@@ -84,6 +146,16 @@ class SoporteScreen extends StatelessWidget {
                   Text('Carretera Monterrey-Saltillo Km. 61.5',
                       style: TextStyle(color: UTSCColors.textoGris, fontSize: 12)),
                 ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _comoLlegar(context),
+                icon: const Icon(Icons.directions),
+                label: const Text('Cómo llegar desde mi ubicación'),
+                style: ElevatedButton.styleFrom(backgroundColor: UTSCColors.naranja, foregroundColor: Colors.white),
               ),
             ),
           ],

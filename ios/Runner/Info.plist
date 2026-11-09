@@ -47,6 +47,24 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>La cámara se usa para tomar tu fotografía y fotografiar tus documentos de inscripción.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Se accede a tus fotos para que elijas los documentos que adjuntas a tu trámite.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>El micrófono se usa para dictar por voz el mensaje de tus consultas a Control Escolar.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>El reconocimiento de voz convierte tu dictado en texto para tus consultas.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Tu ubicación se usa solo para trazar la ruta desde donde estás hasta la UTSC.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Se accede a tus contactos para que elijas a tu contacto de emergencia. No se guarda tu agenda.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>sms</string>
+		<string>https</string>
+	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

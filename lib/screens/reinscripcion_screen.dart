@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart' show ImagePicker, ImageSource, XFile;
+import '../services/permisos_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/colors.dart';
 import '../services/api_service.dart';
@@ -356,6 +357,7 @@ class _ReinscripcionScreenState extends State<ReinscripcionScreen> {
       UTSCFilePicker(
         label: 'Comprobante de Pago * (JPG o PNG)', archivo: _comprobante,
         onSeleccionar: () async {
+          if (!await PermisosService.asegurar(context, AppPermiso.almacenamiento)) return;
           final picker = ImagePicker();
           // Se limita el tamaño: el servidor rechaza documentos de más de 5 MB.
           final f = await picker.pickImage(
