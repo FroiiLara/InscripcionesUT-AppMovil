@@ -3,6 +3,7 @@ import '../constants/colors.dart';
 import '../services/api_service.dart';
 import 'admin_dashboard_view.dart';
 import 'admin_reportes_view.dart';
+import 'admin_solicitud_detalle_screen.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -106,7 +107,26 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     );
   }
 
-  Future<void> _cambiarEstatus(dynamic sol, String tipo, String nuevoEstatus, {String? motivo}) async {
+  /// Abre el detalle de la solicitud; desde ahí se puede aprobar o rechazar.
+  Future<void> _abrirDetalle(dynamic sol, String tipo) async {
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => AdminSolicitudDetalleScreen(
+        solicitud: sol,
+        tipo: tipo,
+        onCambiar: (estatus) async {
+          String? motivo;
+          if (estatus == 'Rechazada') {
+            motivo = await _pedirMotivo('${sol['folio']}');
+            if (motivo == null) return false;
+          }
+          return _cambiarEstatus(sol, tipo, estatus, motivo: motivo);
+        },
+      ),
+    ));
+    if (mounted) setState(() {});   // refresca la lista con el estatus nuevo
+  }
+
+  Future<bool> _cambiarEstatus(dynamic sol, String tipo, String nuevoEstatus, {String? motivo}) async {
     final folio = sol['folio'] ?? '';
     final ok = await ApiService.actualizarEstatus(
         folio: folio, tipo: tipo, estatus: nuevoEstatus, motivo: motivo);
@@ -127,6 +147,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Error al actualizar. Intenta de nuevo.'), backgroundColor: UTSCColors.error));
     }
+    return ok;
   }
 
   void _dialogo(dynamic sol, String tipo) {
@@ -243,6 +264,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
               itemCount: items.length,
               itemBuilder: (_, i) => _Tarjeta(
                   solicitud: items[i], tipo: tipo,
+                  onVer: () => _abrirDetalle(items[i], tipo),
                   onAccion: () => _dialogo(items[i], tipo))),
     );
   }
@@ -251,8 +273,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
 class _Tarjeta extends StatelessWidget {
   final dynamic solicitud;
   final String tipo;
+  final VoidCallback onVer;
   final VoidCallback onAccion;
-  const _Tarjeta({required this.solicitud, required this.tipo, required this.onAccion});
+  const _Tarjeta({required this.solicitud, required this.tipo, required this.onVer, required this.onAccion});
 
   Color get _color {
     final e = solicitud['estatus'] ?? '';
@@ -281,7 +304,10 @@ class _Tarjeta extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12), elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12),
           side: BorderSide(color: _color.withOpacity(0.3))),
-      child: Padding(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onVer,
+        child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,18 +365,36 @@ class _Tarjeta extends StatelessWidget {
                   const SizedBox(width: 6), Text(fecha, style: const TextStyle(fontSize: 12, color: UTSCColors.textoGris))]),
             ],
             const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: onAccion,
-              icon: const Icon(Icons.edit, size: 16),
-              label: const Text('Cambiar estatus'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: UTSCColors.verde, side: const BorderSide(color: UTSCColors.verde),
-                minimumSize: const Size(double.infinity, 40),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            Row(children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: onVer,
+                  icon: const Icon(Icons.visibility_outlined, size: 18),
+                  label: const Text('Ver detalle', maxLines: 1, softWrap: false),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: UTSCColors.verde, foregroundColor: Colors.white,
+                    minimumSize: const Size(0, 40),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Tooltip(
+                message: 'Cambio rápido de estatus',
+                child: OutlinedButton(
+                  onPressed: onAccion,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: UTSCColors.verde, side: const BorderSide(color: UTSCColors.verde),
+                    minimumSize: const Size(48, 40), padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Icon(Icons.edit, size: 18),
+                ),
+              ),
+            ]),
           ],
         ),
+      ),
       ),
     );
   }
