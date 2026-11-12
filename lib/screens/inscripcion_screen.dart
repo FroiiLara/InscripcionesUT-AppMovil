@@ -398,10 +398,11 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
       const SizedBox(height: 16),
       UTSCCampo(label: 'Carrera *', child: DropdownButtonFormField<String>(
         value: _carrera,
+        isExpanded: true,
         decoration: const InputDecoration(prefixIcon: Icon(Icons.school_outlined, color: UTSCColors.verde)),
-        hint: const Text('-- Selecciona una carrera --'),
+        hint: const Text('-- Selecciona una carrera --', overflow: TextOverflow.ellipsis),
         items: _carreras.map((c) => DropdownMenuItem(value: c.$1,
-            child: Text(c.$2, style: const TextStyle(fontSize: 13)))).toList(),
+            child: Text(c.$2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
         onChanged: (v) => setState(() => _carrera = v),
       )),
       const SizedBox(height: 14),
@@ -494,13 +495,13 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       decoration: BoxDecoration(color: Colors.white,
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, -3))]),
-      child: Row(
+      child: SafeArea(top: false, child: Row(
         children: [
           if (_paso > 0) ...[
             Expanded(child: OutlinedButton.icon(
               onPressed: () => setState(() => _paso--),
               icon: const Icon(Icons.arrow_back, color: UTSCColors.textoGris),
-              label: const Text('Anterior', style: TextStyle(color: UTSCColors.textoGris)),
+              label: const Text('Anterior', maxLines: 1, softWrap: false, style: TextStyle(color: UTSCColors.textoGris)),
               style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48),
                   side: const BorderSide(color: UTSCColors.borde),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
@@ -512,13 +513,13 @@ class _InscripcionScreenState extends State<InscripcionScreen> {
             icon: _enviando
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                 : Icon(esUltimo ? Icons.send : Icons.arrow_forward),
-            label: Text(esUltimo ? 'Enviar Solicitud' : 'Siguiente'),
+            label: Text(esUltimo ? 'Enviar Solicitud' : 'Siguiente', maxLines: 1, softWrap: false),
             style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48),
                 backgroundColor: esUltimo ? UTSCColors.verde : UTSCColors.naranja,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
           )),
         ],
-      ),
+      )),
     );
   }
 }
